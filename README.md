@@ -87,6 +87,30 @@ rm -f ~/.dsh/bin/browser-bridge-launch.sh
 # restart DSH
 ```
 
+## Reliability: what happens when the tab dies
+
+A `--extension` session is bound to **one tab**. If that tab is closed, reloads into a login wall, Chrome restarts, or the extension's MV3 service worker goes to sleep, the Playwright server keeps waiting on a target that no longer answers. Historically that meant **every later tool call hung until the client's own timeout** — the whole toolset looks dead, and no amount of clicking in Chrome brings it back.
+
+`bin/mcp-watchdog.mjs` now sits between DSH and the server:
+
+| Behaviour | Before | Now |
+| --- | --- | --- |
+| A call that cannot reach the tab | hangs ~60s | fails in 8s with an actionable message |
+| Calls queued behind it | all hang | unaffected once the guard fires |
+| Driving `localhost` / `file://` | allowed (this is what poisoned the session) | refused up front, code `-32002` |
+| Recovery | manual: `kill -TERM <pid>` | automatic: the watchdog restarts the server |
+
+Tune with `DSH_RELAY_TIMEOUT_MS` (default `8000`) and `DSH_RELAY_INIT_TIMEOUT_MS` (default `25000`).
+
+If you still see a hang, the message now tells you which of the three it is. The manual fallback is unchanged:
+
+```sh
+pgrep -fl "playwright/mcp/cli.js"
+kill -TERM <pid>        # DSH respawns it on the next call
+```
+
+`node bin/check.mjs --browser` distinguishes the two failure classes: `RESULT=browser-ok` means the extension is reachable; exit code `3` means it is not.
+
 ## Known limitations
 
 - `@playwright/mcp --extension` connects to Chrome; it cannot create tabs in a profile that has no extension installed.

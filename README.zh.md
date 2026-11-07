@@ -95,6 +95,30 @@ rm -f ~/.dsh/bin/browser-bridge-launch.sh
 # 重启 DSH
 ```
 
+## 稳定性：标签页死了会怎样
+
+`--extension` 模式下，一个会话只绑定**一个标签页**。这个标签被关闭、刷新成登录页、Chrome 重启，或者扩展的 MV3 后台被浏览器休眠，Playwright 服务端就会一直等一个不会回应的目标。以前的表现是：**之后每一次工具调用都挂到客户端超时**——整个浏览器工具集看起来死了，在 Chrome 里怎么点都救不回来。
+
+现在 `bin/mcp-watchdog.mjs` 挡在 DSH 和服务端之间：
+
+| 行为 | 以前 | 现在 |
+| --- | --- | --- |
+| 调不到标签页 | 挂约 60 秒 | 8 秒内失败，并给出可操作提示 |
+| 排在它后面的调用 | 一起挂 | 不再受牵连 |
+| 驱动 `localhost` / `file://` | 允许（正是它把会话带死的） | 直接拒绝，错误码 `-32002` |
+| 恢复方式 | 手工 `kill -TERM <pid>` | 自动重启服务端 |
+
+可用 `DSH_RELAY_TIMEOUT_MS`（默认 `8000`）与 `DSH_RELAY_INIT_TIMEOUT_MS`（默认 `25000`）调整。
+
+仍然卡住时，报错会说明是哪一类。手工兜底不变：
+
+```sh
+pgrep -fl "playwright/mcp/cli.js"
+kill -TERM <pid>        # DSH 会在下次调用时重新拉起
+```
+
+`node bin/check.mjs --browser` 用来区分两类故障：`RESULT=browser-ok` 说明扩展可达；退出码 `3` 说明扩展连不上。
+
 ## 已知限制
 
 - `@playwright/mcp --extension` 连接的是已安装扩展的 Chrome，不能凭空创建标签页。
