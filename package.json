@@ -1,0 +1,45 @@
+{
+  "name": "dsh-chrome-relay",
+  "version": "0.2.0",
+  "description": "Reuse your already signed-in Chrome from DeepSeek Harness through the official Playwright MCP extension relay. No cookie export, no stored token.",
+  "license": "MIT",
+  "author": "zhaoxuan0205-sys",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "bin",
+    "cordis.patch.yml",
+    "install.mjs",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "playwright",
+    "mcp",
+    "browser",
+    "chrome-extension"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "check": "node bin/check.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dsh": {
+    "bundle": {
+      "listedByDefault": false,
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

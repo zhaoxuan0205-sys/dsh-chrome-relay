@@ -1,0 +1,4 @@
+# Placeholder shipped with the package so the bundle always loads.
+# Run "node install.mjs" once to replace it with machine-specific paths
+# (launcher, output dir, cwd). The generated version is local-only.
+[]
