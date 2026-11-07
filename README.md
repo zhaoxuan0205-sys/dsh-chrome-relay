@@ -1,5 +1,7 @@
 # dsh-chrome-relay
 
+**English** · [中文](README.zh.md)
+
 Drive **your already signed-in Chrome** from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — without re-login, without exporting cookies, and without storing any credential.
 
 > Status: experimental. Verified on macOS with DSH 0.2.x, Chrome + the official Playwright extension.

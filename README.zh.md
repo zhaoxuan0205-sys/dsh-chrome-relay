@@ -1,5 +1,7 @@
 # dsh-chrome-relay
 
+[English](README.md) · **中文**
+
 让 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 直接操作**你正在用的 Chrome**：不用重新登录、不导出 Cookie、不保存任何凭证。
 
 > 状态：实验性。已在 macOS + DSH 0.2.x + Chrome（官方 Playwright 扩展）上验证。
