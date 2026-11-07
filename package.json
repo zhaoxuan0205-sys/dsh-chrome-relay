@@ -41,5 +41,21 @@
       "listedByDefault": false,
       "patch": "./cordis.patch.yml"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhaoxuan0205-sys/dsh-chrome-relay.git"
+  },
+  "homepage": "https://github.com/zhaoxuan0205-sys/dsh-chrome-relay#readme",
+  "bugs": {
+    "url": "https://github.com/zhaoxuan0205-sys/dsh-chrome-relay/issues"
+  },
+  "peerDependencies": {
+    "@playwright/mcp": "0.0.84"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/mcp": {
+      "optional": false
+    }
   }
 }
