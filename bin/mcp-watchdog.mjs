@@ -10,17 +10,18 @@
  * What this does:
  *   1. enforces a per-call timeout and answers with an actionable error;
  *   2. refuses to drive localhost / file:// (that is what poisoned the link);
- *   3. on a timeout, exits so the parent respawns a fresh server — which is
- *      the only recovery that actually works today.
+ *   3. on a timeout, answers that call with an error but KEEPS the server
+ *      alive. Restarting the server would force the user to approve the tab
+ *      again, so a single slow call must never trigger a respawn.
  *
  * Env:
- *   DSH_RELAY_TIMEOUT_MS       default 8000
- *   DSH_RELAY_INIT_TIMEOUT_MS  default 25000
+ *   DSH_RELAY_TIMEOUT_MS       default 60000 (a slow page must not cost an approval)
+ *   DSH_RELAY_INIT_TIMEOUT_MS  default 30000
  */
 import { spawn } from 'node:child_process'
 
-const CALL_TIMEOUT = Number(process.env.DSH_RELAY_TIMEOUT_MS || 8000)
-const INIT_TIMEOUT = Number(process.env.DSH_RELAY_INIT_TIMEOUT_MS || 25000)
+const CALL_TIMEOUT = Number(process.env.DSH_RELAY_TIMEOUT_MS || 60000)
+const INIT_TIMEOUT = Number(process.env.DSH_RELAY_INIT_TIMEOUT_MS || 30000)
 const [, , cli, ...args] = process.argv
 if (!cli) {
   console.error('[relay] usage: mcp-watchdog.mjs <cli.js> [args...]')
@@ -33,6 +34,7 @@ const write = (obj) => process.stdout.write(JSON.stringify(obj) + '\n')
 let child = null
 let shutdown = false
 const pending = new Map() // id -> timer
+const abandoned = new Set() // timed-out ids: drop late replies
 
 function failAll(reason) {
   for (const [id, t] of pending) {
@@ -56,6 +58,10 @@ function start() {
       if (!line.trim()) continue
       try {
         const msg = JSON.parse(line)
+        if (msg.id !== undefined && abandoned.has(msg.id)) {
+          abandoned.delete(msg.id)
+          continue
+        }
         if (msg.id !== undefined && pending.has(msg.id)) {
           clearTimeout(pending.get(msg.id))
           pending.delete(msg.id)
@@ -115,12 +121,16 @@ process.stdin.on('data', (chunk) => {
     const limit = msg.method === 'initialize' ? INIT_TIMEOUT : CALL_TIMEOUT
     const timer = setTimeout(() => {
       pending.delete(msg.id)
+      abandoned.add(msg.id)
       write({ jsonrpc: '2.0', id: msg.id, error: { code: -32001,
-        message: '浏览器无响应（' + limit + 'ms）。通常是绑定的标签页已失效：请在 Chrome 的 Playwright 扩展里重新选择标签页，然后重试。' } })
-      log('timeout on ' + (msg.method || 'call') + ' id=' + msg.id + ' — restarting server')
-      shutdown = true
-      try { child && child.kill('SIGTERM') } catch {}
-      setTimeout(() => process.exit(0), 30)
+        message: '浏览器无响应（' + limit + 'ms）。本次调用已中止，但中继保持连接，不会重新授权。若标签页已失效，请在 Chrome 的 Playwright 扩展里重新选择标签页；仍不行再重启 DSH。' } })
+      // Ask the MCP server to cancel the stuck request. This is best-effort:
+      // the tab may be truly gone, but it lets later calls run without a restart.
+      try {
+        child && child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled',
+          params: { requestId: msg.id, reason: 'watchdog timeout' } }) + '\n')
+      } catch {}
+      log('timeout on ' + (msg.method || 'call') + ' id=' + msg.id + ' — keeping server pid=' + (child && child.pid))
     }, limit)
 
     pending.set(msg.id, timer)
