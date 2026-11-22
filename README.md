@@ -95,12 +95,12 @@ A `--extension` session is bound to **one tab**. If that tab is closed, reloads 
 
 | Behaviour | Before | Now |
 | --- | --- | --- |
-| A call that cannot reach the tab | hangs ~60s | fails in 8s with an actionable message |
+| A call that cannot reach the tab | hangs ~60s | fails in 120s (configurable) with an actionable message |
 | Calls queued behind it | all hang | unaffected once the guard fires |
 | Driving `localhost` / `file://` | allowed (this is what poisoned the session) | refused up front, code `-32002` |
-| Recovery | manual: `kill -TERM <pid>` | automatic: the watchdog restarts the server |
+| Recovery | manual: `kill -TERM <pid>` | the call fails fast; the server is **not** restarted, so the tab approval is kept |
 
-Tune with `DSH_RELAY_TIMEOUT_MS` (default `8000`) and `DSH_RELAY_INIT_TIMEOUT_MS` (default `25000`).
+Tune with `DSH_RELAY_TIMEOUT_MS` (default `60000`) and `DSH_RELAY_INIT_TIMEOUT_MS` (default `30000`). The watchdog **never restarts the server on a timeout** any more — a restart would force a new tab approval.
 
 If you still see a hang, the message now tells you which of the three it is. The manual fallback is unchanged:
 
@@ -110,6 +110,33 @@ kill -TERM <pid>        # DSH respawns it on the next call
 ```
 
 `node bin/check.mjs --browser` distinguishes the two failure classes: `RESULT=browser-ok` means the extension is reachable; exit code `3` means it is not.
+
+## Why am I asked to approve the tab again and again?
+
+**One approval = one MCP server process + one Chrome tab.** The Playwright
+extension's approval is a UI decision bound to that connection; it is not
+stored per document and cannot be reused by a new process.
+
+Normal behaviour: **one approval per DSH start**, reused for every `browser_*`
+call in that session.
+
+If you see roughly one prompt per action, a new server is being spawned per
+action. The usual causes:
+
+1. a helper script starts `@playwright/mcp` for every tool call (the most common
+   cause — each process = one prompt);
+2. DSH restarts the MCP client because the watchdog exited on a timeout
+   (older builds did this; this build keeps the server alive);
+3. a second browser MCP client is connected (another DSH profile/window).
+
+Rules to keep it at one approval:
+
+- Use DSH's built-in `browser_*` tools. Do not start a second server per action.
+- Batch DOM work into **one** `browser_run_code_unsafe` call, not one MCP call
+  per click/keystroke.
+- On a timeout, re-select the tab in the extension; do not kill the server.
+- Check: `pgrep -fl "playwright/mcp/cli.js"` should show exactly one CLI
+  process. More than one means the user will be asked more than once.
 
 ## Known limitations
 
